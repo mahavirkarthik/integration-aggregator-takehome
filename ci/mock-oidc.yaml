@@ -1,0 +1,71 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mock-oidc-config
+  namespace: integration
+data:
+  config.json: |
+    {
+      "interactiveLogin": false
+    }
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mock-oidc
+  namespace: integration
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: mock-oidc
+  template:
+    metadata:
+      labels:
+        app: mock-oidc
+    spec:
+      containers:
+        - name: mock-oidc
+          image: ghcr.io/navikt/mock-oauth2-server:6.0.2
+          ports:
+            - containerPort: 8080
+          env:
+            - name: SERVER_PORT
+              value: "8080"
+            - name: JSON_CONFIG_PATH
+              value: /config/config.json
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          readinessProbe:
+            httpGet:
+              path: /isalive
+              port: 8080
+            initialDelaySeconds: 3
+            periodSeconds: 2
+          livenessProbe:
+            httpGet:
+              path: /isalive
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+      volumes:
+        - name: config
+          configMap:
+            name: mock-oidc-config
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mock-oidc
+  namespace: integration
+spec:
+  type: NodePort
+  selector:
+    app: mock-oidc
+  ports:
+    - port: 8080
+      targetPort: 8080
+      nodePort: 30080

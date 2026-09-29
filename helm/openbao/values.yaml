@@ -1,0 +1,68 @@
+server:
+  standalone:
+    enabled: true
+
+    config: |
+      ui = true
+
+      plugin_directory = "/openbao/plugins"
+
+      listener "tcp" {
+        tls_disable = 1
+        address = "[::]:8200"
+        cluster_address = "[::]:8201"
+      }
+
+      storage "file" {
+        path = "/openbao/data"
+      }
+
+      api_addr = "http://openbao.integration.svc:8200"
+
+  extraInitContainers:
+    - name: install-oauthapp
+      image: alpine:3.20
+      securityContext:
+        runAsUser: 0
+        runAsGroup: 0
+        runAsNonRoot: false
+      command:
+        - /bin/sh
+        - -ec
+      args:
+        - |
+          apk add --no-cache curl xz
+
+          cd /tmp
+
+          curl -fL \
+            -o oauthapp.tar.xz \
+            https://github.com/openbao/openbao-plugin-secrets-oauthapp/releases/download/v3.4.1/openbao-plugin-secrets-oauthapp-v3.4.1-linux-amd64.tar.xz
+
+          echo "8e449c649c29ba032e42ecd85bb26be537cdbb7330873600ce08ec48dc8a8e3e  oauthapp.tar.xz" \
+            | sha256sum -c -
+
+          tar -xJf oauthapp.tar.xz
+
+          mv \
+            openbao-plugin-secrets-oauthapp-v3.4.1-linux-amd64 \
+            /openbao/plugins/oauthapp
+
+          chmod 0755 /openbao/plugins/oauthapp
+
+          test "$(sha256sum /openbao/plugins/oauthapp | awk '{print $1}')" = \
+            "b9b5b2c752889ffe7d708522d6726752f8bba972769693cf5c84b7ce64a60ec5"
+
+          echo "oauthapp plugin installed and verified"
+
+      volumeMounts:
+        - name: plugins
+          mountPath: /openbao/plugins
+  volumes:
+    - name: plugins
+      emptyDir: {}
+
+  volumeMounts:
+    - name: plugins
+      mountPath: /openbao/plugins
+      readOnly: true
