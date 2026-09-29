@@ -8,7 +8,7 @@ OPENBAO_CHART_VERSION := 0.29.6
 OPENBAO_VALUES := helm/openbao/values.yaml
 
 .PHONY: up down test build load-image helm-lint \
-        ensure-minikube install-openbao bootstrap-openbao
+	ensure-minikube install-openbao bootstrap-openbao
 
 test:
 	python -m pytest -q
@@ -28,14 +28,29 @@ install-openbao:
 		--namespace $(NAMESPACE) \
 		--create-namespace \
 		-f $(OPENBAO_VALUES)
+
+	@echo "Waiting for OpenBao pod to start..."
+	@for i in $$(seq 1 90); do \
+		if kubectl get pod/openbao-0 -n $(NAMESPACE) >/dev/null 2>&1; then \
+			break; \
+		fi; \
+		sleep 2; \
+	done
+
 	@kubectl wait \
 		--namespace $(NAMESPACE) \
-		--for=condition=Ready \
+		--for=jsonpath='{.status.phase}'=Running \
 		pod/openbao-0 \
 		--timeout=180s
 
 bootstrap-openbao:
 	./scripts/bootstrap-openbao.sh
+	@echo "Waiting for OpenBao to become ready..."
+	@kubectl wait \
+		--namespace $(NAMESPACE) \
+		--for=condition=Ready \
+		pod/openbao-0 \
+		--timeout=120s
 
 build:
 	docker build -t $(IMAGE) .
@@ -65,6 +80,11 @@ up: ensure-minikube test helm-lint install-openbao bootstrap-openbao load-image
 		--timeout=120s
 
 	@echo "Checking application health..."
+	kubectl delete job \
+		--namespace $(NAMESPACE) \
+		$(APP_NAME)-healthcheck \
+		--ignore-not-found
+
 	kubectl create job \
 		$(APP_NAME)-healthcheck \
 		--namespace $(NAMESPACE) \

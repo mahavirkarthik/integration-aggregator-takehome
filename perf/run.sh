@@ -2,16 +2,52 @@
 set -euo pipefail
 
 BASE_URL="${BASE_URL:-http://127.0.0.1:8000}"
-PROVIDER="${PROVIDER:-github}"
-USER="${USER_NAME:-test-user}"
+PROVIDER="${PROVIDER:-perf-oidc}"
+USER="${USER_NAME:-perf-user}"
 CONCURRENCY="${CONCURRENCY:-3}"
 REQUESTS="${REQUESTS:-30}"
 
 tmp_file="$(mktemp)"
 trap 'rm -f "$tmp_file"' EXIT
 
+echo "Preparing performance test provider..."
+
+REGISTER_RESPONSE="$(
+  curl --silent --show-error \
+    -X POST \
+    -H "Content-Type: application/json" \
+    -w '\n%{http_code}' \
+    "$BASE_URL/providers" \
+    -d '{
+      "name": "'"$PROVIDER"'",
+      "provider": "oidc",
+      "client_id": "perf-client",
+      "client_secret": "perf-secret",
+      "scopes": ["openid", "profile", "email"],
+      "provider_options": {
+        "issuer_url": "'"${OIDC_ISSUER_URL:-http://localhost:30080/default}"'"
+      }
+    }'
+)"
+
+HTTP_CODE="$(echo "$REGISTER_RESPONSE" | tail -n 1)"
+REGISTER_BODY="$(echo "$REGISTER_RESPONSE" | sed '$d')"
+
+if [[ "$HTTP_CODE" == "201" ]]; then
+  echo "Performance provider created."
+  echo "$REGISTER_BODY" | jq .
+elif [[ "$HTTP_CODE" == "409" ]]; then
+  echo "Performance provider already exists; reusing it."
+else
+  echo "ERROR: Failed to register performance provider."
+  echo "HTTP status: $HTTP_CODE"
+  echo "$REGISTER_BODY" | jq . 2>/dev/null || echo "$REGISTER_BODY"
+  exit 1
+fi
+
 URL="${BASE_URL}/${PROVIDER}/${USER}"
 
+echo
 echo "Performance test"
 echo "URL: ${URL}"
 echo "Concurrency: ${CONCURRENCY}"
