@@ -11,7 +11,7 @@ OPENBAO_VALUES := helm/openbao/values.yaml
         ensure-minikube install-openbao bootstrap-openbao
 
 test:
-	pytest -q
+	python -m pytest -q
 
 ensure-minikube:
 	@command -v minikube >/dev/null || \
