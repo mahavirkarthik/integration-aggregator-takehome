@@ -163,6 +163,7 @@ async def get_request(
         status=request_state.status,
         provider=request_state.provider,
         user=request_state.user,
+	token=request_state.token,
         error=request_state.error,
     )
 

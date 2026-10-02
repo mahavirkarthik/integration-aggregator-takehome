@@ -38,6 +38,7 @@ class RequestStatusResponse(BaseModel):
     status: str
     provider: str
     user: str
+    token: str | None = None
     error: str | None = None
 
 
